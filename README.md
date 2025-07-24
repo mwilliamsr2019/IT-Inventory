@@ -53,6 +53,7 @@ sudo systemctl restart apache2
 
 1. **Clone or extract the application** to your web directory:
 ```bash
+sudo mkdir -p /var/www/html/inventory/
 sudo cp -r * /var/www/html/inventory/
 sudo chown -R www-data:www-data /var/www/html/inventory/
 ```
