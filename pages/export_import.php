@@ -1,9 +1,19 @@
 <?php
 require_once 'config/database.php';
 require_once 'includes/functions.php';
+require_once 'includes/security.php';
+
+// Verify CSRF token for all POST requests
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!verifyCSRFToken($_POST['csrf_token'] ?? '')) {
+        die('Invalid request - CSRF token mismatch');
+    }
+}
 
 // Handle export
 if (isset($_POST['export'])) {
+    logSecurityEvent('DATA_EXPORT', $_SESSION['user_id'] ?? null, 'CSV export initiated');
+    
     $database = new Database();
     $db = $database->connect();
     
@@ -50,9 +60,14 @@ $import_error = '';
 $import_success = '';
 
 if (isset($_POST['import']) && isset($_FILES['csv_file'])) {
+    logSecurityEvent('DATA_IMPORT', $_SESSION['user_id'] ?? null, 'CSV import initiated');
+    
     $file = $_FILES['csv_file'];
     
-    if ($file['error'] === UPLOAD_ERR_OK && $file['type'] === 'text/csv') {
+    if (!validateFileUpload($file, ['csv'])) {
+        $import_error = "Invalid file. Please upload a valid CSV file (max 10MB).";
+        logSecurityEvent('INVALID_FILE_UPLOAD', $_SESSION['user_id'] ?? null, "File type: {$file['type']}");
+    } else {
         $handle = fopen($file['tmp_name'], 'r');
         
         if ($handle !== false) {
@@ -67,6 +82,18 @@ if (isset($_POST['import']) && isset($_FILES['csv_file'])) {
                 $error_count = 0;
                 
                 while (($data = fgetcsv($handle)) !== false) {
+                    // Validate required fields
+                    if (empty($data[0]) || empty($data[1]) || empty($data[2]) || empty($data[3])) {
+                        $error_count++;
+                        continue;
+                    }
+                    
+                    // Validate serial and property numbers
+                    if (!validateSerialNumber($data[2]) || !validatePropertyNumber($data[3])) {
+                        $error_count++;
+                        continue;
+                    }
+                    
                     // Get location ID
                     $location_id = null;
                     if (!empty($data[7]) && $data[7] !== 'N/A') {
@@ -120,14 +147,14 @@ if (isset($_POST['import']) && isset($_FILES['csv_file'])) {
                 
                 fclose($handle);
                 $import_success = "Import completed: $success_count items imported, $error_count errors.";
+                logSecurityEvent('DATA_IMPORT_COMPLETED', $_SESSION['user_id'] ?? null, "Success: $success_count, Errors: $error_count");
             } else {
                 $import_error = "Invalid CSV format. Please use the export format.";
+                logSecurityEvent('INVALID_CSV_FORMAT', $_SESSION['user_id'] ?? null);
             }
         } else {
             $import_error = "Could not read the uploaded file.";
         }
-    } else {
-        $import_error = "Please upload a valid CSV file.";
     }
 }
 ?>
@@ -158,6 +185,7 @@ if (isset($_POST['import']) && isset($_FILES['csv_file'])) {
             <div class="card-body">
                 <p>Export all inventory data as CSV (Excel compatible).</p>
                 <form method="POST" action="index.php?page=export">
+                    <input type="hidden" name="csrf_token" value="<?php echo generateCSRFToken(); ?>">
                     <button type="submit" name="export" class="btn btn-success">
                         <i class="fas fa-download"></i> Export to CSV
                     </button>
@@ -176,6 +204,7 @@ if (isset($_POST['import']) && isset($_FILES['csv_file'])) {
             <div class="card-body">
                 <p>Import inventory data from CSV file.</p>
                 <form method="POST" action="index.php?page=export" enctype="multipart/form-data">
+                    <input type="hidden" name="csrf_token" value="<?php echo generateCSRFToken(); ?>">
                     <div class="mb-3">
                         <label for="csv_file" class="form-label">Select CSV File</label>
                         <input type="file" class="form-control" id="csv_file" name="csv_file" 

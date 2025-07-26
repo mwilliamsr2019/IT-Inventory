@@ -2,8 +2,10 @@
 require_once 'config/database.php';
 require_once 'includes/auth.php';
 require_once 'includes/functions.php';
+require_once 'includes/security.php';
 
 session_start();
+setSecurityHeaders();
 
 // Check if user is logged in
 if (!isLoggedIn()) {

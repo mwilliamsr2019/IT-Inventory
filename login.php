@@ -2,8 +2,10 @@
 require_once 'config/database.php';
 require_once 'includes/auth.php';
 require_once 'includes/functions.php';
+require_once 'includes/security.php';
 
 session_start();
+setSecurityHeaders();
 
 // Redirect if already logged in
 if (isLoggedIn()) {
@@ -15,73 +17,92 @@ $error = '';
 $username = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $username = sanitizeInput($_POST['username'] ?? '');
-    $password = $_POST['password'] ?? '';
-    
-    if (empty($username) || empty($password)) {
-        $error = 'Please enter both username and password.';
+    // Verify CSRF token
+    if (!verifyCSRFToken($_POST['csrf_token'] ?? '')) {
+        $error = 'Invalid request. Please try again.';
     } else {
-        // Check database authentication
-        $database = new Database();
-        $db = $database->connect();
+        $username = sanitizeInput($_POST['username'] ?? '');
+        $password = $_POST['password'] ?? '';
         
-        $query = "SELECT id, username, password_hash, role FROM users WHERE username = :username";
-        $stmt = $db->prepare($query);
-        $stmt->bindParam(':username', $username);
-        $stmt->execute();
-        
-        $user = $stmt->fetch();
-        
-        if ($user && verifyPassword($password, $user['password_hash'])) {
-            // Successful login
-            loginUser($user['id'], $user['username'], $user['role']);
-            
-            // Redirect to intended page or dashboard
-            $redirect = $_SESSION['redirect_to'] ?? 'index.php';
-            unset($_SESSION['redirect_to']);
-            header("Location: $redirect");
-            exit();
+        if (empty($username) || empty($password)) {
+            $error = 'Please enter both username and password.';
         } else {
-            // Try SSSD/LDAP authentication if database fails
-            if (extension_loaded('ldap')) {
-                // SSSD/LDAP authentication attempt
-                $ldapSuccess = authenticateSSSD($username, $password);
-                if ($ldapSuccess) {
-                    // Check if user exists in database, create if not
-                    $query = "SELECT id, username, role FROM users WHERE username = :username";
-                    $stmt = $db->prepare($query);
-                    $stmt->bindParam(':username', $username);
-                    $stmt->execute();
+            // Check rate limiting
+            if (!checkLoginAttempts($username)) {
+                $error = 'Too many login attempts. Please try again in 15 minutes.';
+                logSecurityEvent('LOGIN_RATE_LIMIT_EXCEEDED', null, "Username: $username");
+            } else {
+                // Check database authentication
+                $database = new Database();
+                $db = $database->connect();
+                
+                $query = "SELECT id, username, password_hash, role FROM users WHERE username = :username";
+                $stmt = $db->prepare($query);
+                $stmt->bindParam(':username', $username);
+                $stmt->execute();
+                
+                $user = $stmt->fetch();
+                
+                if ($user && verifyPassword($password, $user['password_hash'])) {
+                    // Successful login
+                    clearLoginAttempts($username);
+                    loginUser($user['id'], $user['username'], $user['role']);
                     
-                    $user = $stmt->fetch();
+                    logSecurityEvent('SUCCESSFUL_LOGIN', $user['id'], "Username: $username");
                     
-                    if (!$user) {
-                        // Create new user from LDAP
-                        $query = "INSERT INTO users (username, password_hash, email, full_name, role) 
-                                  VALUES (:username, :password_hash, :email, :full_name, 'user')";
-                        $stmt = $db->prepare($query);
-                        $stmt->bindValue(':username', $username);
-                        $stmt->bindValue(':password_hash', password_hash(uniqid(), PASSWORD_BCRYPT));
-                        $stmt->bindValue(':email', $username . '@company.com');
-                        $stmt->bindValue(':full_name', ucfirst($username));
-                        $stmt->execute();
-                        
-                        $userId = $db->lastInsertId();
-                    } else {
-                        $userId = $user['id'];
-                        $user['role'] = $user['role'];
-                    }
-                    
-                    loginUser($userId, $username, $user['role'] ?? 'user');
-                    
+                    // Redirect to intended page or dashboard
                     $redirect = $_SESSION['redirect_to'] ?? 'index.php';
                     unset($_SESSION['redirect_to']);
                     header("Location: $redirect");
                     exit();
+                } else {
+                    // Try SSSD/LDAP authentication if database fails
+                    if (extension_loaded('ldap')) {
+                        // SSSD/LDAP authentication attempt
+                        $ldapSuccess = authenticateSSSD($username, $password);
+                        if ($ldapSuccess) {
+                            // Check if user exists in database, create if not
+                            $query = "SELECT id, username, role FROM users WHERE username = :username";
+                            $stmt = $db->prepare($query);
+                            $stmt->bindParam(':username', $username);
+                            $stmt->execute();
+                            
+                            $user = $stmt->fetch();
+                            
+                            if (!$user) {
+                                // Create new user from LDAP
+                                $query = "INSERT INTO users (username, password_hash, email, full_name, role)
+                                          VALUES (:username, :password_hash, :email, :full_name, 'user')";
+                                $stmt = $db->prepare($query);
+                                $stmt->bindValue(':username', $username);
+                                $stmt->bindValue(':password_hash', password_hash(uniqid(), PASSWORD_BCRYPT));
+                                $stmt->bindValue(':email', $username . '@company.com');
+                                $stmt->bindValue(':full_name', ucfirst($username));
+                                $stmt->execute();
+                                
+                                $userId = $db->lastInsertId();
+                            } else {
+                                $userId = $user['id'];
+                                $user['role'] = $user['role'];
+                            }
+                            
+                            clearLoginAttempts($username);
+                            loginUser($userId, $username, $user['role'] ?? 'user');
+                            
+                            logSecurityEvent('SUCCESSFUL_LOGIN', $userId, "Username: $username (LDAP)");
+                            
+                            $redirect = $_SESSION['redirect_to'] ?? 'index.php';
+                            unset($_SESSION['redirect_to']);
+                            header("Location: $redirect");
+                            exit();
+                        }
+                    }
+                    
+                    recordLoginAttempt($username);
+                    logSecurityEvent('FAILED_LOGIN', null, "Username: $username");
+                    $error = 'Invalid username or password.';
                 }
             }
-            
-            $error = 'Invalid username or password.';
         }
     }
 }
@@ -143,34 +164,37 @@ function authenticateSSSD($username, $password) {
                         <?php endif; ?>
                         
                         <form method="POST" action="login.php">
-                            <div class="mb-3">
-                                <label for="username" class="form-label">Username</label>
-                                <div class="input-group">
-                                    <span class="input-group-text">
-                                        <i class="fas fa-user"></i>
-                                    </span>
-                                    <input type="text" class="form-control" id="username" name="username" 
-                                           value="<?php echo htmlspecialchars($username); ?>" required autofocus>
-                                </div>
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label for="password" class="form-label">Password</label>
-                                <div class="input-group">
-                                    <span class="input-group-text">
-                                        <i class="fas fa-lock"></i>
-                                    </span>
-                                    <input type="password" class="form-control" id="password" name="password" required>
-                                </div>
-                            </div>
-                            
-                            <div class="d-grid">
-                                <button type="submit" class="btn btn-primary">
-                                    <i class="fas fa-sign-in-alt me-2"></i>
-                                    Login
-                                </button>
-                            </div>
-                        </form>
+                           <input type="hidden" name="csrf_token" value="<?php echo generateCSRFToken(); ?>">
+                           <div class="mb-3">
+                               <label for="username" class="form-label">Username</label>
+                               <div class="input-group">
+                                   <span class="input-group-text">
+                                       <i class="fas fa-user"></i>
+                                   </span>
+                                   <input type="text" class="form-control" id="username" name="username"
+                                          value="<?php echo htmlspecialchars($username); ?>" required autofocus
+                                          autocomplete="username">
+                               </div>
+                           </div>
+                           
+                           <div class="mb-3">
+                               <label for="password" class="form-label">Password</label>
+                               <div class="input-group">
+                                   <span class="input-group-text">
+                                       <i class="fas fa-lock"></i>
+                                   </span>
+                                   <input type="password" class="form-control" id="password" name="password" required
+                                          autocomplete="current-password">
+                               </div>
+                           </div>
+                           
+                           <div class="d-grid">
+                               <button type="submit" class="btn btn-primary">
+                                   <i class="fas fa-sign-in-alt me-2"></i>
+                                   Login
+                               </button>
+                           </div>
+                       </form>
                         
                         <hr>
                         
