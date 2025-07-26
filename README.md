@@ -64,12 +64,14 @@ sudo chown -R www-data:www-data /var/www/html/inventory/
    ```bash
    cp config/.env.example config/.env
    nano config/.env
+   sudo chown -R www-data:www-data config/.env
+   rm -f config/.env.example
    ```
 
 3. **Set permissions**:
 ```bash
 sudo chmod 755 -R /var/www/html/inventory/
-sudo chmod 644 /var/www/html/inventory/config/.env
+sudo chmod 640 /var/www/html/inventory/config/.env
 ```
 
 ### 4. SSSD Configuration (Optional)
