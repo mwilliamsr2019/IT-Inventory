@@ -103,11 +103,11 @@ echo "✅ Excess date validation: 2030-01-11 (future date)\n\n";
 // Step 6: Access information
 echo "Step 6: Access Information\n";
 echo "=========================\n";
-echo "✅ Application URL: http://localhost:8080\n";
-echo "✅ Login page: http://localhost:8080/login.php\n";
+echo "✅ Application URL: http://localhost\n";
+echo "✅ Login page: http://localhost/login.php\n";
 echo "✅ Username: admin\n";
 echo "✅ Password: admin123\n";
-echo "✅ Inventory add page: http://localhost:8080/index.php?page=inventory&action=add\n\n";
+echo "✅ Inventory add page: http://localhost/index.php?page=inventory&action=add\n\n";
 
 echo "=== Process Complete ===\n";
 echo "The inventory entry has been successfully validated and would be created in the system.\n";

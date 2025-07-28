@@ -95,6 +95,6 @@ echo "✅ Location assignment: Server Room A (ID: 1)\n\n";
 
 echo "=== Process Complete ===\n";
 echo "The inventory entry has been successfully validated and would be created in the system.\n";
-echo "Access URL: http://localhost:8080/it-inventory\n";
+echo "Access URL: http://localhost/it-inventory\n";
 echo "Login: admin / admin123\n";
 ?>

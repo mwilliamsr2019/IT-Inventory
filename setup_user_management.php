@@ -10,8 +10,8 @@ if (php_sapi_name() !== 'cli') {
 // Database configuration
 $host = 'localhost';
 $dbname = 'it_inventory';
-$username = 'root';
-$password = '';
+$username = 'itinv_user';
+$password = 'SecurePass123!';
 
 try {
     $pdo = new PDO("mysql:host=$host", $username, $password);
@@ -74,7 +74,7 @@ try {
     echo "✅ Password history tracking enabled\n";
     echo "✅ User audit logging enabled\n";
     echo "\n📋 Next Steps:\n";
-    echo "1. Access user management at: http://localhost:8080/index.php?page=users\n";
+    echo "1. Access user management at: http://localhost/index.php?page=users\n";
     echo "2. Login with: admin / admin123\n";
     echo "3. Create additional users and groups as needed\n";
     
