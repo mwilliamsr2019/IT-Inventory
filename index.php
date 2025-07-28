@@ -56,6 +56,25 @@ $page = $_GET['page'] ?? 'dashboard';
                             <i class="fas fa-file-export"></i> Export/Import
                         </a>
                     </li>
+                    <?php if (isAdmin()): ?>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle <?php echo $page === 'users' ? 'active' : ''; ?>"
+                           href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-users"></i> Users
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="index.php?page=users&action=list">
+                                <i class="fas fa-list"></i> All Users
+                            </a></li>
+                            <li><a class="dropdown-item" href="index.php?page=users&action=add">
+                                <i class="fas fa-plus"></i> Add User
+                            </a></li>
+                            <li><a class="dropdown-item" href="index.php?page=users&action=groups">
+                                <i class="fas fa-users-cog"></i> Manage Groups
+                            </a></li>
+                        </ul>
+                    </li>
+                    <?php endif; ?>
                 </ul>
                 <ul class="navbar-nav">
                     <li class="nav-item dropdown">
@@ -106,6 +125,29 @@ $page = $_GET['page'] ?? 'dashboard';
                 break;
             case 'profile':
                 include 'pages/profile.php';
+                break;
+            case 'users':
+                $action = $_GET['action'] ?? 'list';
+                switch ($action) {
+                    case 'add':
+                        include 'pages/users/add.php';
+                        break;
+                    case 'edit':
+                        include 'pages/users/edit.php';
+                        break;
+                    case 'view':
+                        include 'pages/users/view.php';
+                        break;
+                    case 'groups':
+                        include 'pages/users/groups.php';
+                        break;
+                    case 'activate':
+                    case 'deactivate':
+                        include 'pages/users/actions.php';
+                        break;
+                    default:
+                        include 'pages/users/list.php';
+                }
                 break;
             default:
                 include 'pages/dashboard.php';
