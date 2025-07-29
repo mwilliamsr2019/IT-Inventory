@@ -24,22 +24,22 @@ try {
     $pdo->exec("USE $dbname");
     echo "✅ Database '$dbname' selected\n";
     
-    // Read and execute user management schema
-    $schema = file_get_contents('database/user_management_schema.sql');
+    // Read and execute combined schema
+    $schema = file_get_contents('database/combined_schema.sql');
     if ($schema === false) {
-        throw new Exception("Cannot read user management schema file");
+        throw new Exception("Cannot read combined schema file");
     }
     
     // Split and execute SQL statements
     $statements = array_filter(array_map('trim', explode(';', $schema)));
     
     foreach ($statements as $statement) {
-        if (!empty($statement)) {
+        if (!empty($statement) && !preg_match('/^--/', trim($statement))) {
             $pdo->exec($statement);
         }
     }
     
-    echo "✅ User management schema created successfully\n";
+    echo "✅ Combined schema created successfully\n";
     
     // Create default admin user if doesn't exist
     $check = $pdo->query("SELECT COUNT(*) FROM users_enhanced WHERE username = 'admin'")->fetchColumn();

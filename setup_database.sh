@@ -33,8 +33,8 @@ CREATE USER IF NOT EXISTS 'itinv_user'@'localhost' IDENTIFIED BY 'SecurePass123!
 GRANT ALL PRIVILEGES ON it_inventory.* TO 'itinv_user'@'localhost';
 FLUSH PRIVILEGES;
 
--- Source the schema
-SOURCE database/schema.sql;
+-- Source the combined schema
+SOURCE database/combined_schema.sql;
 
 -- Verify setup
 SELECT 'Database setup complete!' AS status;
@@ -55,7 +55,7 @@ DB_PASS=SecurePass123!
 
 # Application Configuration
 APP_NAME="IT Inventory Management System"
-APP_URL=http://localhost
+APP_URL=http://localhost/inventory
 APP_ENV=development
 
 # Security
@@ -79,7 +79,7 @@ EOL
     echo ""
     echo "📋 Next Steps:"
     echo "1. Ensure .env file has correct permissions: chmod 600 config/.env"
-    echo "2. Access the application at: http://localhost/it-inventory"
+    echo "2. Access the application at: http://localhost/inventory"
     echo "3. Login with: admin / admin123"
     echo "4. Change the admin password immediately!"
     

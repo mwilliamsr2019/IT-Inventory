@@ -111,38 +111,29 @@ CREATE TABLE IF NOT EXISTS user_audit_log (
     INDEX idx_audit_time (created_at)
 );
 
--- Insert default authentication types
-INSERT INTO auth_types (name, description, config) VALUES
+-- Insert default authentication types (ignore duplicates)
+INSERT IGNORE INTO auth_types (name, description, config) VALUES
 ('local', 'Local Database Authentication', '{"type": "local", "enabled": true}'),
 ('ldap', 'Active Directory/LDAP Authentication', '{"type": "ldap", "host": "localhost", "port": 389, "base_dn": "dc=example,dc=com", "user_filter": "(uid=%s)"}'),
 ('sssd', 'SSSD Authentication', '{"type": "sssd", "service": "sssd"}');
 
--- Insert default groups
-INSERT INTO groups (name, description, permissions) VALUES
+-- Insert default groups (ignore duplicates)
+INSERT IGNORE INTO groups (name, description, permissions) VALUES
 ('admin', 'System Administrators', '{"inventory": ["create", "read", "update", "delete"], "users": ["create", "read", "update", "delete"], "reports": ["read"], "settings": ["read", "update"]}'),
 ('manager', 'IT Managers', '{"inventory": ["create", "read", "update"], "users": ["read"], "reports": ["read"], "settings": ["read"]}'),
 ('operator', 'IT Operators', '{"inventory": ["create", "read", "update"], "users": ["read"], "reports": ["read"]}'),
 ('viewer', 'Read-Only Users', '{"inventory": ["read"], "reports": ["read"]}');
 
--- Insert default admin user with enhanced schema
-INSERT INTO users_enhanced (username, password_hash, email, full_name, display_name, auth_type_id, role, department, job_title) VALUES
-('admin', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'admin@example.com', 'System Administrator', 'Admin User', 1, 'admin', 'IT', 'System Administrator');
+-- Insert default admin user with enhanced schema (ignore duplicates)
+INSERT IGNORE INTO users_enhanced (username, password_hash, email, full_name, display_name, auth_type_id, department, job_title) VALUES
+('admin', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'admin@example.com', 'System Administrator', 'Admin User', 1, 'IT', 'System Administrator');
 
--- Assign admin to admin group
-INSERT INTO user_groups (user_id, group_id, assigned_by) VALUES
-(1, 1, 1);
+-- Assign admin to admin group (ignore duplicates)
+INSERT IGNORE INTO user_groups (user_id, group_id, assigned_by)
+SELECT 1, 1, 1 WHERE NOT EXISTS (
+    SELECT 1 FROM user_groups WHERE user_id = 1 AND group_id = 1
+);
 
--- Create triggers for password history
-DELIMITER $$
-
-CREATE TRIGGER after_user_password_update
-    AFTER UPDATE ON users_enhanced
-    FOR EACH ROW
-BEGIN
-    IF OLD.password_hash != NEW.password_hash THEN
-        INSERT INTO password_history (user_id, password_hash)
-        VALUES (OLD.id, OLD.password_hash);
-    END IF;
-END$$
-
-DELIMITER ;
+-- Note: Password history is handled in application code
+-- The trigger has been removed to avoid SQL splitting issues
+-- Password history is managed in the updateUser function in includes/user_functions.php
